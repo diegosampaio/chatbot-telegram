@@ -1,0 +1,246 @@
+{
+  "name": "workflow-telegram-chatbot",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "0314fea7-32bd-459b-90c4-b18481c4c14b",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [
+        -880,
+        112
+      ],
+      "webhookId": "unique-webhook-id",
+      "credentials": {
+        "telegramApi": {
+          "id": "pKPD0inbjkBOJ1aP",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "queue",
+              "value": "={{ $json.message.text.toLowerCase().trim().normalize(\"NFD\").replace(/[\\u0300-\\u036f]/g, \"\") }}, br"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8c590645-ef9b-4118-8ca4-85a872eb6627",
+      "name": "Set queue",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openweathermap.org/data/2.5/weather",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.queue }}"
+            },
+            {
+              "name": "units",
+              "value": "metric"
+            },
+            {
+              "name": "lang",
+              "value": "pt_br"
+            },
+            {
+              "name": "appid",
+              "value": "={{ $env.OPENWEATHER_API_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3dfa3114-86bc-4d61-a0a1-a1071f35e467",
+      "name": "OpenWeather API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -448,
+        112
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.cod }}",
+              "operation": "equal",
+              "value2": 200
+            }
+          ]
+        }
+      },
+      "id": "8b2c7422-da34-4a65-aa24-18f479ef8753",
+      "name": "Validar Resposta",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $node[\"Telegram Trigger\"].json.message.chat.id }}",
+        "text": "❌ Cidade não encontrada. Use o formato Cidade,UF,BR (ex.: São Paulo,SP,BR).",
+        "additionalFields": {}
+      },
+      "id": "c62abf01-cd60-4218-8470-2b3d41b8241c",
+      "name": "Erro: Cidade Não Encontrada",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        224
+      ],
+      "webhookId": "0c47db19-0b82-4d0b-b3cc-6d1579624615",
+      "credentials": {
+        "telegramApi": {
+          "id": "pKPD0inbjkBOJ1aP",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const temp = Math.round($node[\"OpenWeather API\"].json.main.temp);\nconst city = $node[\"OpenWeather API\"].json.name;\n\nreturn {\n  message: `🌤️ A temperatura em ${city} é de ${temp}°C.`,\n  ok: true\n};"
+      },
+      "id": "93ee9412-f9d0-46bd-8da6-80fb81aa866c",
+      "name": "Fallback Determinístico",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $node[\"Telegram Trigger\"].json.message.chat.id }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "id": "a9369062-d053-4e20-b9f3-ff4fee62986a",
+      "name": "Telegram: Resposta Final",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        272,
+        0
+      ],
+      "webhookId": "7f782757-0b64-4d0f-b27e-291deaefc728",
+      "credentials": {
+        "telegramApi": {
+          "id": "pKPD0inbjkBOJ1aP",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set queue": {
+      "main": [
+        [
+          {
+            "node": "OpenWeather API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenWeather API": {
+      "main": [
+        [
+          {
+            "node": "Validar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Resposta": {
+      "main": [
+        [
+          {
+            "node": "Fallback Determinístico",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Erro: Cidade Não Encontrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fallback Determinístico": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Resposta Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "d2fa0852-905b-4efa-b546-27a005e222ab",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "28ad828fd305b51e102756c2641598034cb08155408339fe829d8b8b8278b0d2"
+  },
+  "id": "Z0d3UUzv1MP0J5tk",
+  "tags": []
+}
